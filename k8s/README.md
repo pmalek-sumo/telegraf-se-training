@@ -7,6 +7,15 @@
     * [Run `eksctl create cluster`](#run-eksctl-create-cluster)
     * [Ensure `kubectl` works with created cluster](#ensure-kubectl-works-with-created-cluster)
   * [Deploy sumologic-kubernetes-collection on k8s cluster](#deploy-sumologic-kubernetes-collection-on-k8s-cluster)
+    * [What makes metrics get from kubernetes cluster to Sumo?](#what-makes-metrics-get-from-kubernetes-cluster-to-sumo)
+  * [Redis](#redis)
+    * [Deploy redis to cluster](#deploy-redis-to-cluster)
+    * [Observe redis metrics in Sumo](#observe-redis-metrics-in-sumo)
+  * [Nginx](#nginx)
+    * [Deploy nginx to the cluster](#deploy-nginx-to-the-cluster)
+    * [Observe nginx metrics getting to Sumo](#observe-nginx-metrics-getting-to-sumo)
+  * [JMX/Jolokia2 agent](#jmxjolokia2-agent)
+  * [Tips and tricks](#tips-and-tricks)
 
 ## Prerequisites
 
@@ -164,6 +173,51 @@ my-release-sumologic-fluentd-metrics-2                0/1     Running   0       
 prometheus-my-release-prometheus-oper-prometheus-0    4/4     Running   1          21s
 ```
 
+### What makes metrics get from kubernetes cluster to Sumo?
+
+In order for the metrics to get from the kubernetes cluster to Sumo via the `telegraf-operator`
+we need the special sause being a set of annotations that tell `telegraf-operator`
+
+* how to get the metrics from the app(s) or in telegraf language from an `input`
+* which output to send the data to - in our case it's exposing the metrics via
+  [`prometheus_client` output](https://github.com/influxdata/telegraf/tree/master/plugins/outputs/prometheus_client)
+  which will be picked by collection's prometheus instance and then forwarded to
+  Sumo via a [remote write](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write)
+
+This is the set of annotations that are required on the pods that want to expose
+metrics taking `nginx` as an example with its status endpoint
+
+```
+annotations:
+  telegraf.influxdata.com/inputs: |+
+    [[inputs.nginx]]
+      urls = ["http://localhost/nginx_status"]
+  telegraf.influxdata.com/class: sumologic-prometheus
+  telegraf.influxdata.com/limits-cpu: '750m'
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9273"
+```
+
+And this is the configuration of `telegraf-operator` that can be found in default
+[`values.yaml`](https://github.com/SumoLogic/sumologic-kubernetes-collection/blob/db41ec17bcab89a9b0d81bea7aca2d50e9cd8357/deploy/helm/sumologic/values.yaml#L1751-L1766)
+provided by our collection chart
+
+```
+telegraf-operator:
+  enabled: false
+  replicaCount: 1
+  classes:
+    secretName: "telegraf-operator-classes"
+    default: "sumologic-prometheus"
+    data:
+      sumologic-prometheus: |
+        [[outputs.prometheus_client]]
+          ## Configuration details:
+          ## https://github.com/influxdata/telegraf/tree/master/plugins/outputs/prometheus_client#configuration
+          listen = ":9273"
+          metric_version = 2
+```
+
 ## Redis
 
 ### Deploy redis to cluster
@@ -174,7 +228,7 @@ namespace/redis created
 ```
 
 ```
-kubectl -n redis apply -f ./k8s/redis/statefulset.yaml
+kubectl --namespace redis apply -f ./k8s/redis/statefulset.yaml
 statefulset.apps/redis created
 ```
 
@@ -271,7 +325,108 @@ _source="(default-metrics)" metric=redis*
 
 ![Telegraf redis metrics view](./sumo_metrics_view_telegraf_redis.png "Telegraf redis metrics view")
 
-##
+## Nginx
+
+### Deploy nginx to the cluster
+
+```
+kubectl create ns nginx
+namespace/nginx created
+```
+
+```
+kubectl apply -f ./k8s/nginx/configmap.yaml
+configmap/nginx-config created
+```
+
+```
+kubectl apply -f ./k8s/nginx/statefulset.yaml
+statefulset.apps/nginx created
+```
+
+Now you should observe that nginx is running with telegraf sidecar inside the pod
+
+```
+kubectl describe pod --namespace nginx nginx-0
+Name:         nginx-0
+Namespace:    nginx
+Priority:     0
+Node:         ip-192-168-48-77.us-west-1.compute.internal/192.168.48.77
+Start Time:   Thu, 29 Oct 2020 18:28:42 +0100
+Labels:       app=nginx
+              controller-revision-hash=nginx-c6b484c5f
+              statefulset.kubernetes.io/pod-name=nginx-0
+Annotations:  kubernetes.io/psp: eks.privileged
+              prometheus.io/port: 9273
+              prometheus.io/scrape: true
+              telegraf.influxdata.com/class: sumologic-prometheus
+              telegraf.influxdata.com/inputs:
+                [[inputs.nginx]]
+                  urls = ["http://localhost/nginx_status"]
+              telegraf.influxdata.com/limits-cpu: 750m
+Status:       Running
+IP:           192.168.38.229
+IPs:
+  IP:           192.168.38.229
+Controlled By:  StatefulSet/nginx
+Containers:
+  nginx:
+    Container ID:   docker://257f1be7bb0b6605ff6717b3a1b18baa90ac722b34f6d68b7aa32dff5d2e5ef8
+    Image:          nginx:alpine
+    Image ID:       docker-pullable://nginx@sha256:5aa44b407756b274a600c7399418bdfb1d02c33317ae27fd5e8a333afb115db1
+    Port:           <none>
+    Host Port:      <none>
+    State:          Running
+      Started:      Thu, 29 Oct 2020 18:28:46 +0100
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /etc/nginx/conf.d/default.conf from config-volume (rw,path="default.conf")
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-bppf4 (ro)
+  telegraf:
+    Container ID:   docker://39a4527cfc5d20217fc05576c7f07eb6cea9120e9339ed09f4920ad9bb2add86
+    Image:          docker.io/library/telegraf:1.14.4
+    Image ID:       docker-pullable://telegraf@sha256:f78008ce19c7e261d79da0c05c70d2368b848f448dfe23c12228c60c8de3768d
+    Port:           <none>
+    Host Port:      <none>
+    State:          Running
+      Started:      Thu, 29 Oct 2020 18:28:52 +0100
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     750m
+      memory:  200Mi
+    Requests:
+      cpu:     10m
+      memory:  10Mi
+    Environment:
+      NODENAME:   (v1:spec.nodeName)
+    Mounts:
+      /etc/telegraf from telegraf-config (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-bppf4 (ro)
+
+...
+
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  58s   default-scheduler  Successfully assigned nginx/nginx-0 to ip-192-168-48-77.us-west-1.compute.internal
+  Normal  Pulling    57s   kubelet            Pulling image "nginx:alpine"
+  Normal  Pulled     54s   kubelet            Successfully pulled image "nginx:alpine"
+  Normal  Created    54s   kubelet            Created container nginx
+  Normal  Started    54s   kubelet            Started container nginx
+  Normal  Pulling    54s   kubelet            Pulling image "docker.io/library/telegraf:1.14.4"
+  Normal  Pulled     49s   kubelet            Successfully pulled image "docker.io/library/telegraf:1.14.4"
+  Normal  Created    48s   kubelet            Created container telegraf
+  Normal  Started    48s   kubelet            Started container telegraf
+```
+
+### Observe nginx metrics getting to Sumo
+
+TODO
+
+## JMX/Jolokia2 agent
 
 ## Tips and tricks
 
