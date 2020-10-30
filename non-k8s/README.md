@@ -1,74 +1,185 @@
 # Telegraf on non-k8s
 
-* [Telegraf on non-k8s](#telegraf-on-non-k8s)
-  * [Prerequisites](#prerequisites)
-    * [Download Telegraf to local machine](#download-telegraf-to-local-machine)
-      * [Mac](#mac)
-      * [Linux](#linux)
-  * [Redis](#redis)
-    * [Start redis container](#start-redis-container)
-    * [Telegraf configuration for redis](#telegraf-configuration-for-redis)
-    * [Start telegraf to collect metrics from redis](#start-telegraf-to-collect-metrics-from-redis)
-    * [Observe redis metrics in Sumo Logic](#observe-redis-metrics-in-sumo-logic)
-  * [Nginx](#nginx)
-    * [Start nginx container](#start-nginx-container)
-      * [Add status page configuration to nginx](#add-status-page-configuration-to-nginx)
-    * [Telegraf configuration for nginx](#telegraf-configuration-for-nginx)
-    * [Start telegraf to collect metrics from nginx](#start-telegraf-to-collect-metrics-from-nginx)
-    * [Observe nginx metrics in Sumo Logic](#observe-nginx-metrics-in-sumo-logic)
-  * [JMX](#jmx)
-    * [Start tomcat container with jolokia2 jvm agent](#start-tomcat-container-with-jolokia2-jvm-agent)
-    * [Telegraf configuration for jolokia2 agent](#telegraf-configuration-for-jolokia2-agent)
-    * [Start telegraf to collect metrics from jolokia2 jvm agent](#start-telegraf-to-collect-metrics-from-jolokia2-jvm-agent)
-    * [Observe jolokia2 jvm metrics in Sumo Logic](#observe-jolokia2-jvm-metrics-in-sumo-logic)
-  * [Tips and tricks](#tips-and-tricks)
-    * [See the metrics sent in terminal](#see-the-metrics-sent-in-terminal)
-    * [See more information about what's happening in telegraf](#see-more-information-about-whats-happening-in-telegraf)
-  * [Common pitfalls](#common-pitfalls)
-    * [`Error writing to outputs.sumologic`](#error-writing-to-outputssumologic)
+* [Prerequisites](#prerequisites)
+  * [Launch an EC2 instance](#launch-an-ec2-instance)
+  * [Install Telegraf](#install-telegraf)
+    * [Amazon Linux 2 AMI](#amazon-linux-2-ami)
+* [Redis](#redis)
+  * [Install redis on Amazon Linux 2](#install-redis-on-amazon-linux-2)
+  * [Start redis](#start-redis)
+  * [Telegraf configuration for redis](#telegraf-configuration-for-redis)
+  * [Start telegraf to collect metrics from redis](#start-telegraf-to-collect-metrics-from-redis)
+  * [Observe redis metrics in Sumo Logic](#observe-redis-metrics-in-sumo-logic)
+* [Nginx](#nginx)
+  * [Install nginx on Amazon Linux 2](#install-nginx-on-amazon-linux-2)
+  * [Add status page configuration to nginx](#add-status-page-configuration-to-nginx)
+  * [Start nginx](#start-nginx)
+  * [Telegraf configuration for nginx](#telegraf-configuration-for-nginx)
+  * [Start telegraf to collect metrics from nginx](#start-telegraf-to-collect-metrics-from-nginx)
+  * [Observe nginx metrics in Sumo Logic](#observe-nginx-metrics-in-sumo-logic)
+* [JMX](#jmx)
+  * [Install Java and tomcat](#install-java-and-tomcat)
+  * [Start tomcat with jolokia2 jvm agent](#start-tomcat-with-jolokia2-jvm-agent)
+  * [Telegraf configuration for jolokia2 agent](#telegraf-configuration-for-jolokia2-agent)
+  * [Start telegraf to collect metrics from jolokia2 jvm agent](#start-telegraf-to-collect-metrics-from-jolokia2-jvm-agent)
+  * [Observe jolokia2 jvm metrics in Sumo Logic](#observe-jolokia2-jvm-metrics-in-sumo-logic)
+* [Tips and tricks](#tips-and-tricks)
+  * [See the metrics sent in terminal](#see-the-metrics-sent-in-terminal)
+  * [See more information about what's happening in telegraf](#see-more-information-about-whats-happening-in-telegraf)
+* [Common pitfalls](#common-pitfalls)
+  * [`Error writing to outputs.sumologic`](#error-writing-to-outputssumologic)
 
 ## Prerequisites
 
 * created [HTTP collector](https://help.sumologic.com/03Send-Data/Hosted-Collectors/Configure-a-Hosted-Collector)
 * created [HTTP Source](https://help.sumologic.com/03Send-Data/Sources/02Sources-for-Hosted-Collectors/HTTP-Source#configure-an-http%C2%A0logs-and-metrics-source)
 * link for the HTTP Source created above [help](https://help.sumologic.com/03Send-Data/Sources/02Sources-for-Hosted-Collectors/HTTP-Source/zGenerate-a-new-URL-for-an-HTTP-Source)
+* AWS credentials to create an EC2 instance
 
-### Download Telegraf to local machine
+### Launch an EC2 instance
 
-After installing `telegraf` with below steps ensure you can run it
+We're going to use an EC2 instance in order to run telegraf and applications on it.
+Please start an instance using `Amazon Linux 2 AMI` with an instance type having
+at least 8GB of RAM and 4vCPUs (e.g. `r5.xlarge`).
+
+Ensure you can ssh into it.
+
+### Install Telegraf
+
+When you're logged in to the machine download `telegraf`
+After installing `telegraf` with steps below ensure you can run it
 
 ```
 telegraf --version
-Telegraf 1.16.0 (git: HEAD c2a53d0f)
+Telegraf 1.16.1 (git: HEAD 292e285a)
 ```
 
-#### Mac
+In order to use [Sumo Logic output plugin](https://github.com/influxdata/telegraf/tree/master/plugins/outputs/sumologic)
+one will need version `v1.16.0` or higher.
+
+#### Amazon Linux 2 AMI
+
+To install `telegraf` on Amazon Linux 2 AMI one can use `yum` and `.rpm`s provided
+by `influxdata`.
+
+First download telegraf
 
 ```
-brew update
-brew install telegraf
+curl -O https://dl.influxdata.com/telegraf/releases/telegraf-1.16.1-1.x86_64.rpm
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 20.6M  100 20.6M    0     0  72.0M      0 --:--:-- --:--:-- --:--:-- 71.8M
 ```
 
-#### Linux
+and then install it using `yum`
 
-Download telegraf from [`v1.16.0` release page](https://github.com/influxdata/telegraf/releases/tag/v1.16.0)
-for your distro and architecture or install it via your distro's package manager.
+```
+sudo yum localinstall telegraf-1.16.1-1.x86_64.rpm -y
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+Examining telegraf-1.16.1-1.x86_64.rpm: telegraf-1.16.1-1.x86_64
+Marking telegraf-1.16.1-1.x86_64.rpm to be installed
+Resolving Dependencies
+--> Running transaction check
+---> Package telegraf.x86_64 0:1.16.1-1 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+=====================================================================================
+ Package        Arch         Version           Repository                       Size
+=====================================================================================
+Installing:
+ telegraf       x86_64       1.16.1-1          /telegraf-1.16.1-1.x86_64        69 M
+
+Transaction Summary
+=====================================================================================
+Install  1 Package
+
+Total size: 69 M
+Installed size: 69 M
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  Installing : telegraf-1.16.1-1.x86_64                                          1/1
+Created symlink from /etc/systemd/system/multi-user.target.wants/telegraf.service to /usr/lib/systemd/system/telegraf.service.
+  Verifying  : telegraf-1.16.1-1.x86_64                                          1/1
+
+Installed:
+  telegraf.x86_64 0:1.16.1-1
+
+Complete!
+```
 
 ## Redis
 
-### Start redis container
-
-Start `redis` in a docker container in a separate terminal window
+### Install redis on Amazon Linux 2
 
 ```
-docker run --rm --name redis -p 6379:6379 redis
-1:C 26 Oct 2020 11:42:45.841 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
-1:C 26 Oct 2020 11:42:45.841 # Redis version=6.0.8, bits=64, commit=00000000, modified=0, pid=1, just started
-1:C 26 Oct 2020 11:42:45.841 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
-1:M 26 Oct 2020 11:42:45.842 * Running mode=standalone, port=6379.
-1:M 26 Oct 2020 11:42:45.842 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
-1:M 26 Oct 2020 11:42:45.842 # Server initialized
-1:M 26 Oct 2020 11:42:45.843 * Ready to accept connections
+sudo amazon-linux-extras install redis4.0 -y
+Installing redis
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+Cleaning repos: amzn2-core amzn2extra-docker amzn2extra-redis4.0
+14 metadata files removed
+6 sqlite files removed
+0 metadata files removed
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+amzn2-core                                                                                                                                         | 3.7 kB  00:00:00
+amzn2extra-docker                                                                                                                                  | 3.0 kB  00:00:00
+amzn2extra-redis4.0                                                                                                                                | 3.0 kB  00:00:00
+(1/7): amzn2-core/2/x86_64/group_gz                                                                                                                | 2.6 kB  00:00:00
+(2/7): amzn2-core/2/x86_64/updateinfo                                                                                                              | 295 kB  00:00:00
+(3/7): amzn2extra-redis4.0/2/x86_64/primary_db                                                                                                     |  11 kB  00:00:00
+(4/7): amzn2extra-docker/2/x86_64/updateinfo                                                                                                       |   76 B  00:00:00
+(5/7): amzn2extra-docker/2/x86_64/primary_db                                                                                                       |  68 kB  00:00:00
+(6/7): amzn2extra-redis4.0/2/x86_64/updateinfo                                                                                                     |   76 B  00:00:00
+(7/7): amzn2-core/2/x86_64/primary_db                                                                                                              |  46 MB  00:00:00
+Resolving Dependencies
+--> Running transaction check
+---> Package redis.x86_64 0:4.0.10-2.amzn2.0.2 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+==========================================================================================================================================================================
+ Package                          Arch                              Version                                          Repository                                      Size
+==========================================================================================================================================================================
+Installing:
+ redis                            x86_64                            4.0.10-2.amzn2.0.2                               amzn2extra-redis4.0                            732 k
+
+Transaction Summary
+==========================================================================================================================================================================
+Install  1 Package
+
+Total download size: 732 k
+Installed size: 2.2 M
+Downloading packages:
+redis-4.0.10-2.amzn2.0.2.x86_64.rpm                                                                                                                | 732 kB  00:00:00
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  Installing : redis-4.0.10-2.amzn2.0.2.x86_64                                                                                                                        1/1
+  Verifying  : redis-4.0.10-2.amzn2.0.2.x86_64                                                                                                                        1/1
+
+Installed:
+  redis.x86_64 0:4.0.10-2.amzn2.0.2
+
+Complete!
+```
+
+### Start redis
+
+Start `redis-server` in a separate terminal window
+
+```
+redis-server
+12664:C 30 Oct 10:03:44.572 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+12664:C 30 Oct 10:03:44.572 # Redis version=4.0.10, bits=64, commit=00000000, modified=0, pid=12664, just started
 ...
 ```
 
@@ -76,7 +187,8 @@ docker run --rm --name redis -p 6379:6379 redis
 
 Official `redis` input plugin documentation can be found at https://github.com/influxdata/telegraf/tree/master/plugins/inputs/redis.
 
-Put the below configuration to a local file e.g. [redis.conf](/non-k8s/redis/redis.conf)
+Put the below configuration to a file (full redis configuration file
+can be found at [redis.conf](/non-k8s/redis/redis.conf))
 
 ```conf
 [agent]
@@ -100,13 +212,13 @@ creating HTTP Source at sumologic
 ### Start telegraf to collect metrics from redis
 
 ```
-telegraf --config ./non-k8s/redis/redis.conf
-2020-10-26T11:42:47Z I! Starting Telegraf 1.16.0
+telegraf --config .redis.conf
+2020-10-26T11:42:47Z I! Starting Telegraf 1.16.1
 2020-10-26T11:42:47Z I! Loaded inputs: redis
 2020-10-26T11:42:47Z I! Loaded aggregators:
 2020-10-26T11:42:47Z I! Loaded processors:
 2020-10-26T11:42:47Z I! Loaded outputs: sumologic
-2020-10-26T11:42:47Z I! Tags enabled: host=pmalek-mac
+2020-10-30T10:06:46Z I! Tags enabled: host=ip-172-31-10-189.eu-west-1.compute.internal
 2020-10-26T11:42:47Z I! [agent] Config: Interval:3s, Quiet:false, Hostname:"pmalek-mac", Flush Interval:3s
 ...
 ```
@@ -123,66 +235,90 @@ Open its metrics view and validate that metrics are coming to Sumo
 
 ## Nginx
 
-### Start nginx container
-
-#### Add status page configuration to nginx
-
-In order to make `nginx` expose metrics on status page add the following configuration
-to a `.conf` file in `/etc/nginx/conf.d/`.
+### Install nginx on Amazon Linux 2
 
 ```
-location /nginx_status {
-    stub_status on;
-    access_log  on;
-    allow all;  # REPLACE with your access policy
-}
-```
-
-If one would like to add the above to `/etc/nginx/conf.d/default.conf`, final
-version of this file should look like this
-
-```
-server {
-    listen       80;
-    listen  [::]:80;
-    server_name  localhost;
-
-    location / {
-        root   /usr/share/nginx/html;
-        index  index.html index.htm;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-
-    location /nginx_status {
-        stub_status on;
-        access_log  on;
-        allow all;  # REPLACE with your access policy
-    }
-}
-```
-
-Using `docker` to achieve this we can add the provided status `conf` file to
-container's directory tree via the following set of flags when starting the container
-
-```
-docker run --name nginx --rm -it -p 8080:80 -v $(pwd)/non-k8s/nginx/default/:/etc/nginx/conf.d/ nginx:1.19-alpine
-/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
-/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
-/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
-10-listen-on-ipv6-by-default.sh: error: /etc/nginx/conf.d/default.conf is not a file or does not exist
-/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
-/docker-entrypoint.sh: Configuration complete; ready for start up
+sudo amazon-linux-extras install nginx1 -y
+Installing nginx
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+Cleaning repos: amzn2-core amzn2extra-docker amzn2extra-nginx1 amzn2extra-redis4.0
+18 metadata files removed
+8 sqlite files removed
+0 metadata files removed
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+amzn2-core                                                        | 3.7 kB  00:00:00
+amzn2extra-docker                                                 | 3.0 kB  00:00:00
+amzn2extra-nginx1                                                 | 3.0 kB  00:00:00
+amzn2extra-redis4.0                                               | 3.0 kB  00:00:00
+(1/9): amzn2-core/2/x86_64/group_gz                               | 2.6 kB  00:00:00
+(2/9): amzn2-core/2/x86_64/updateinfo                             | 295 kB  00:00:00
+(3/9): amzn2extra-nginx1/2/x86_64/primary_db                      |  19 kB  00:00:00
+(4/9): amzn2extra-redis4.0/2/x86_64/updateinfo                    |   76 B  00:00:00
+(5/9): amzn2extra-redis4.0/2/x86_64/primary_db                    |  11 kB  00:00:00
+(6/9): amzn2extra-docker/2/x86_64/updateinfo                      |   76 B  00:00:00
+(7/9): amzn2extra-docker/2/x86_64/primary_db                      |  68 kB  00:00:00
+(8/9): amzn2extra-nginx1/2/x86_64/updateinfo                      |   76 B  00:00:00
+(9/9): amzn2-core/2/x86_64/primary_db                             |  46 MB  00:00:00
+Resolving Dependencies
+--> Running transaction check
 ...
+...
+Installed:
+  nginx.x86_64 1:1.18.0-1.amzn2.0.1
+
+Dependency Installed:
+  dejavu-fonts-common.noarch 0:2.33-6.amzn2
+  dejavu-sans-fonts.noarch 0:2.33-6.amzn2
+  fontconfig.x86_64 0:2.13.0-4.3.amzn2
+  fontpackages-filesystem.noarch 0:1.44-8.amzn2
+  gd.x86_64 0:2.0.35-26.amzn2.0.2
+  gperftools-libs.x86_64 0:2.6.1-1.amzn2
+  libX11.x86_64 0:1.6.7-2.amzn2
+  libX11-common.noarch 0:1.6.7-2.amzn2
+  libXau.x86_64 0:1.0.8-2.1.amzn2.0.2
+  libXpm.x86_64 0:3.5.12-1.amzn2.0.2
+  libxcb.x86_64 0:1.12-1.amzn2.0.2
+  libxslt.x86_64 0:1.1.28-6.amzn2
+  nginx-all-modules.noarch 1:1.18.0-1.amzn2.0.1
+  nginx-filesystem.noarch 1:1.18.0-1.amzn2.0.1
+  nginx-mod-http-geoip.x86_64 1:1.18.0-1.amzn2.0.1
+  nginx-mod-http-image-filter.x86_64 1:1.18.0-1.amzn2.0.1
+  nginx-mod-http-perl.x86_64 1:1.18.0-1.amzn2.0.1
+  nginx-mod-http-xslt-filter.x86_64 1:1.18.0-1.amzn2.0.1
+  nginx-mod-mail.x86_64 1:1.18.0-1.amzn2.0.1
+  nginx-mod-stream.x86_64 1:1.18.0-1.amzn2.0.1
+
+Complete!
+```
+
+### Add status page configuration to nginx
+
+In order to make `nginx` expose metrics on status page so that `telegraf` can
+scrape it, we need to add the following configuration to a `.conf` file in `/etc/nginx/conf.d/`
+
+```
+server{
+  location /nginx_status {
+      stub_status on;
+      access_log  on;
+      allow all;  # REPLACE with your access policy
+  }
+}
+```
+
+### Start nginx
+
+```
+sudo service nginx start
+Redirecting to /bin/systemctl start nginx.service
 ```
 
 At this point we should get the following when sending a request to the server via `curl`
 
 ```
-curl http://localhost:8080/nginx_status
+curl http://localhost/nginx_status
 Active connections: 1
 server accepts handled requests
  1 1 1
@@ -193,7 +329,8 @@ Reading: 0 Writing: 1 Waiting: 0
 
 Official `nginx` input plugin documentation can be found at https://github.com/influxdata/telegraf/tree/master/plugins/inputs/nginx.
 
-Put the below configuration to a local file e.g. [nginx.conf](/non-k8s/nginx/nginx.conf)
+Put the below configuration to a file e.g. `nginx.conf` (full config with all
+possible configuration options - [nginx.conf](/non-k8s/nginx/nginx.conf))
 
 ```conf
 [agent]
@@ -201,7 +338,7 @@ Put the below configuration to a local file e.g. [nginx.conf](/non-k8s/nginx/ngi
   flush_interval = "3000ms"
 
 [[inputs.nginx]]
-  urls = ["http://localhost:8080/server_status"]
+  urls = ["http://localhost/nginx_status"]
 
 [[outputs.sumologic]]
   ## Unique URL generated for your HTTP Metrics Source.
@@ -216,13 +353,13 @@ creating HTTP Source at sumologic.
 ### Start telegraf to collect metrics from nginx
 
 ```
-telegraf --config ./non-k8s/nginx/nginx.conf
-2020-10-27T12:55:11Z I! Starting Telegraf 1.16.0
+telegraf --config nginx.conf
+2020-10-27T12:55:11Z I! Starting Telegraf 1.16.1
 2020-10-27T12:55:11Z I! Loaded inputs: nginx
 2020-10-27T12:55:11Z I! Loaded aggregators:
 2020-10-27T12:55:11Z I! Loaded processors:
 2020-10-27T12:55:11Z I! Loaded outputs: file sumologic
-2020-10-27T12:55:11Z I! Tags enabled: host=pmalek-mac
+2020-10-30T10:06:46Z I! Tags enabled: host=ip-172-31-10-189.eu-west-1.compute.internal
 2020-10-27T12:55:11Z I! [agent] Config: Interval:3s, Quiet:false, Hostname:"pmalek-mac", Flush Interval:3s
 ...
 ```
@@ -235,44 +372,90 @@ Open its metrics view and validate that metrics are coming to Sumo
 
 ## JMX
 
-### Start tomcat container with jolokia2 jvm agent
+### Install Java and tomcat
 
-First we need to the build the container
-
-```
-docker build -t jolokia_jvm_agent -f ./non-k8s/jolokia2/Dockerfile ./non-k8s/jolokia2/
-Sending build context to Docker daemon   7.68kB
-Step 1/3 : FROM tomcat:jdk8-adoptopenjdk-openj9
- ---> d0d7e9f13b61
-Step 2/3 : ADD https://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/1.6.2/jolokia-jvm-1.6.2-agent.jar     /jolokia-jvm-1.6.2-agent.jar
-Downloading [==================================================>]  465.1kB/465.1kB
-
- ---> Using cache
- ---> 972f5e3563d2
-Step 3/3 : ENV CATALINA_OPTS "-javaagent:/jolokia-jvm-1.6.2-agent.jar=host=0.0.0.0,port=8778"
- ---> Using cache
- ---> 20cb5ea1ba17
-Successfully built 20cb5ea1ba17
-Successfully tagged jolokia_jvm_agent:latest
-```
-
-and now we can run it in a separate terminal window
+Install java and tomcat
 
 ```
-docker run --rm -i -t --name jolokia_jvm_agent -p 8778:8778 jolokia_jvm_agent:latest
-Using CATALINA_BASE:   /usr/local/tomcat
-Using CATALINA_HOME:   /usr/local/tomcat
-Using CATALINA_TMPDIR: /usr/local/tomcat/temp
-Using JRE_HOME:        /opt/java/openjdk
-Using CLASSPATH:       /usr/local/tomcat/bin/bootstrap.jar:/usr/local/tomcat/bin/tomcat-juli.jar
-Using CATALINA_OPTS:   -javaagent:/jolokia-jvm-1.6.2-agent.jar=host=0.0.0.0,port=8778
-I> No access restrictor found, access to any MBean is allowed
-Jolokia: Agent started with URL http://172.17.0.2:8778/jolokia/
-28-Oct-2020 12:04:53.215 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version name:   Apache Tomcat/9.0.39
-28-Oct-2020 12:04:53.217 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server built:          Oct 6 2020 14:11:46 UTC
-28-Oct-2020 12:04:53.217 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version number: 9.0.39.0
-28-Oct-2020 12:04:53.217 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log OS Name:               Linux
+sudo amazon-linux-extras install java-openjdk11 tomcat8.5 -y
+Installing java-11-openjdk
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+Cleaning repos: amzn2-core amzn2extra-docker amzn2extra-java-openjdk11
+              : amzn2extra-nginx1 amzn2extra-redis4.0
+22 metadata files removed
+8 sqlite files removed
+0 metadata files removed
+Failed to set locale, defaulting to C
+Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
+amzn2-core                                                    | 3.7 kB  00:00:00
+amzn2extra-docker                                             | 3.0 kB  00:00:00
+amzn2extra-java-openjdk11                                     | 3.0 kB  00:00:00
+amzn2extra-nginx1                                             | 3.0 kB  00:00:00
+amzn2extra-redis4.0                                           | 3.0 kB  00:00:00
+(1/11): amzn2-core/2/x86_64/group_gz                          | 2.6 kB  00:00:00
+(2/11): amzn2-core/2/x86_64/updateinfo                        | 295 kB  00:00:00
+(3/11): amzn2extra-java-openjdk11/2/x86_64/primary_db         |  58 kB  00:00:00
+(4/11): amzn2extra-nginx1/2/x86_64/updateinfo                 |   76 B  00:00:00
+(5/11): amzn2extra-nginx1/2/x86_64/primary_db                 |  19 kB  00:00:00
+(6/11): amzn2extra-docker/2/x86_64/updateinfo                 |   76 B  00:00:00
+(7/11): amzn2extra-redis4.0/2/x86_64/updateinfo               |   76 B  00:00:00
+(8/11): amzn2extra-redis4.0/2/x86_64/primary_db               |  11 kB  00:00:00
+(9/11): amzn2extra-docker/2/x86_64/primary_db                 |  68 kB  00:00:00
+(10/11): amzn2extra-java-openjdk11/2/x86_64/updateinfo        |   76 B  00:00:00
+(11/11): amzn2-core/2/x86_64/primary_db                       |  46 MB  00:00:00
+Resolving Dependencies
 ...
+
+Complete!
+```
+
+### Start tomcat with jolokia2 jvm agent
+
+Download jolokia2 agent
+
+```
+curl -L -O https://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/1.6.2/jolokia-jvm-1.6.2-agent.jar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   134  100   134    0     0    451      0 --:--:-- --:--:-- --:--:--   451
+100  454k  100  454k    0     0  1441k      0 --:--:-- --:--:-- --:--:-- 1441k
+```
+
+and move it to `/`
+
+```
+sudo cp jolokia-jvm-1.6.2-agent.jar /
+```
+
+Edit `/usr/lib/systemd/system/tomcat.service` so that it includes java agent
+configuration
+
+```
+[Unit]
+Description=Apache Tomcat Web Application Container
+After=syslog.target network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/tomcat/tomcat.conf
+Environment="NAME="
+EnvironmentFile=-/etc/sysconfig/tomcat
+ExecStart=/usr/libexec/tomcat/server start
+SuccessExitStatus=143
+User=tomcat
+
+# This is the important bit!
+Environment="CATALINA_OPTS=-javaagent:/jolokia-jvm-1.6.2-agent.jar=host=0.0.0.0,port=8778"
+
+...
+```
+
+and now we can run `tomcat`
+
+```
+sudo service tomcat start
+Redirecting to /bin/systemctl start tomcat.service
 ```
 
 Now confirm that jolokia2 endpoint is working via (using `jq` for pretty JSON output)
@@ -327,7 +510,8 @@ curl -s http://localhost:8778/jolokia/version | jq
 
 Official `jolokia2_agent` input plugin documentation can be found at https://github.com/influxdata/telegraf/tree/master/plugins/inputs/jolokia2.
 
-Put below configuration (whole config file [non-k8s/jolokia2/jolokia2.conf](/non-k8s/jolokia2/jolokia2.conf))
+Put below configuration into a file e.g. `jolokia2.conf` (full configuration
+file [jolokia2.conf](/non-k8s/jolokia2/jolokia2.conf))
 
 ```conf
 [agent]
@@ -408,8 +592,8 @@ creating HTTP Source at sumologic.
 ### Start telegraf to collect metrics from jolokia2 jvm agent
 
 ```
-telegraf --config ./non-k8s/jolokia2/jolokia2.conf
-2020-10-28T12:12:51Z I! Starting Telegraf 1.16.0
+telegraf --config jolokia2.conf
+2020-10-28T12:12:51Z I! Starting Telegraf 1.16.1
 2020-10-28T12:12:51Z I! Loaded inputs: jolokia2_agent
 2020-10-28T12:12:51Z I! Loaded aggregators:
 2020-10-28T12:12:51Z I! Loaded processors:
@@ -450,7 +634,7 @@ After starting `telegraf` with the above included in the configuration we can ob
 metrics in the terminal window
 
 ```
-2020-10-27T12:59:24Z I! Starting Telegraf 1.16.0
+2020-10-27T12:59:24Z I! Starting Telegraf 1.16.1
 2020-10-27T12:59:24Z I! Loaded inputs: nginx
 2020-10-27T12:59:24Z I! Loaded aggregators:
 2020-10-27T12:59:24Z I! Loaded processors:
@@ -472,8 +656,8 @@ nginx,host=pmalek-mac,port=8080,server=localhost reading=0i,writing=1i,waiting=0
 To make `telegraf` logs more verbose one can add `--debug` flag when starting it
 
 ```
-telegraf --config ./non-k8s/nginx/nginx.conf --debug
-2020-10-27T13:01:37Z I! Starting Telegraf 1.16.0
+telegraf --config nginx.conf --debug
+2020-10-27T13:01:37Z I! Starting Telegraf 1.16.1
 2020-10-27T13:01:37Z I! Loaded inputs: nginx
 2020-10-27T13:01:37Z I! Loaded aggregators:
 2020-10-27T13:01:37Z I! Loaded processors:
