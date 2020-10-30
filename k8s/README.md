@@ -1,21 +1,21 @@
 # Telegraf on k8s
 
-* [Telegraf on k8s](#telegraf-on-k8s)
-  * [Prerequisites](#prerequisites)
-  * [Create k8s cluster via `eksctl`](#create-k8s-cluster-via-eksctl)
-    * [AWS credentials for `eksctl`](#aws-credentials-for-eksctl)
-    * [Run `eksctl create cluster`](#run-eksctl-create-cluster)
-    * [Ensure `kubectl` works with created cluster](#ensure-kubectl-works-with-created-cluster)
-  * [Deploy sumologic-kubernetes-collection on k8s cluster](#deploy-sumologic-kubernetes-collection-on-k8s-cluster)
-    * [What makes metrics get from kubernetes cluster to Sumo?](#what-makes-metrics-get-from-kubernetes-cluster-to-sumo)
-  * [Redis](#redis)
-    * [Deploy redis to cluster](#deploy-redis-to-cluster)
-    * [Observe redis metrics in Sumo](#observe-redis-metrics-in-sumo)
-  * [Nginx](#nginx)
-    * [Deploy nginx to the cluster](#deploy-nginx-to-the-cluster)
-    * [Observe nginx metrics getting to Sumo](#observe-nginx-metrics-getting-to-sumo)
-  * [JMX/Jolokia2 agent](#jmxjolokia2-agent)
-  * [Tips and tricks](#tips-and-tricks)
+* [Prerequisites](#prerequisites)
+* [Create k8s cluster via `eksctl`](#create-k8s-cluster-via-eksctl)
+  * [AWS credentials for `eksctl`](#aws-credentials-for-eksctl)
+  * [Run `eksctl create cluster`](#run-eksctl-create-cluster)
+  * [Ensure `kubectl` works with created cluster](#ensure-kubectl-works-with-created-cluster)
+* [Deploy sumologic-kubernetes-collection on k8s cluster](#deploy-sumologic-kubernetes-collection-on-k8s-cluster)
+  * [What makes metrics get from kubernetes cluster to Sumo?](#what-makes-metrics-get-from-kubernetes-cluster-to-sumo)
+* [Redis](#redis)
+  * [Deploy redis to cluster](#deploy-redis-to-cluster)
+  * [Observe redis metrics in Sumo](#observe-redis-metrics-in-sumo)
+* [Nginx](#nginx)
+  * [Deploy nginx to the cluster](#deploy-nginx-to-the-cluster)
+  * [Observe nginx metrics getting to Sumo](#observe-nginx-metrics-getting-to-sumo)
+* [JMX/Jolokia2 agent](#jmxjolokia2-agent)
+  * [Deploy tomcat with Jolokia2 agent](#deploy-tomcat-with-jolokia2-agent)
+  * [Observe tomcat metrics getting to Sumo](#observe-tomcat-metrics-getting-to-sumo)
 
 ## Prerequisites
 
@@ -334,6 +334,9 @@ kubectl create ns nginx
 namespace/nginx created
 ```
 
+One can observe that configmap applied below also contains nginx status page configuration
+as it's done for [non-k8s approach](/non-k8s/README.md#add-status-page-configuration-to-nginx) as well
+
 ```
 kubectl apply -f ./k8s/nginx/configmap.yaml
 configmap/nginx-config created
@@ -424,11 +427,57 @@ Events:
 
 ### Observe nginx metrics getting to Sumo
 
-TODO
+Going to metrics source view as [we did for redis](#observe-redis-metrics-in-sumo)
+we can observe `nginx` metrics getting to Sumo using the following query
+
+```
+_source="(default-metrics)" metric=nginx*
+```
+
+![Telegraf nginx metrics view](./sumo_metrics_view_telegraf_nginx.png "Telegraf nginx metrics view")
 
 ## JMX/Jolokia2 agent
 
-## Tips and tricks
+### Deploy tomcat with Jolokia2 agent
 
+Create `jolokia2` namespace
 
-TODO
+```
+kubectl create ns jolokia2
+namespace/jolokia2 created
+```
+
+and deploy tomcat with jolokia2 agent.
+
+```
+kubectl apply -f ./k8s/jolokia2/statefulset.yaml
+statefulset.apps/jolokia created
+```
+
+The above wraps a small tomcat image with the following env added:
+
+```
+ENV CATALINA_OPTS "-javaagent:/jolokia-jvm-1.6.2-agent.jar=host=0.0.0.0,port=8778"
+```
+
+and deploys it to the cluster.
+
+### Observe tomcat metrics getting to Sumo
+
+Since we're using custom tagging using [generic input plugin configuration](https://github.com/influxdata/telegraf/blob/master/docs/CONFIGURATION.md#examples)
+via `.tags` option we can filter jolokia2 metrics by `custom_tag` added in
+[`statefulset.yaml`](/k8s/jolokia2/statefulset.yaml)
+
+```
+_source="(default-metrics)"  custom_tag=jolokia2
+```
+
+![Telegraf jolokia2 metrics view](./sumo_metrics_view_telegraf_jolokia2.png "Telegraf jolokia2 metrics view")
+
+We can also use many different tags added by our collection like
+
+* `namespace`
+* `cluster` - set in [Deploy sumologic-kubernetes-collection on k8s cluster](#deploy-sumologic-kubernetes-collection-on-k8s-cluster)
+* `node`
+
+etc.
