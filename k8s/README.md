@@ -21,8 +21,9 @@
 
 * link for the HTTP Source created above ([Sumo Logic help](https://help.sumologic.com/03Send-Data/Sources/02Sources-for-Hosted-Collectors/HTTP-Source/zGenerate-a-new-URL-for-an-HTTP-Source))
 * AWS credentials
-* `eksctl`
-* `helm` v3
+* [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+* [`eksctl`](https://eksctl.io/introduction/#installation)
+* [`helm` v3](https://helm.sh/)
 
 ## Create k8s cluster via `eksctl`
 
@@ -31,7 +32,7 @@
 Ensure you have AWS credentials ready in the environment
 
 ```
-env | grep AWS_
+$ env | grep AWS_
 AWS_REGION=<redacted>
 AWS_ACCESS_KEY_ID=<redacted>
 AWS_SECRET_ACCESS_KEY=<redacted>
@@ -41,14 +42,14 @@ AWS_SESSION_TOKEN=<redacted>
 or you have a profile defined in `~/.aws/credentials` and set in environment
 
 ```
-env | grep AWS_PROFILE
+$ env | grep AWS_PROFILE
 AWS_PROFILE=<redacted>
 ```
 
 ### Run `eksctl create cluster`
 
 ```
-eksctl create cluster --config-file ./k8s/cluster.yaml
+$ eksctl create cluster --config-file ./k8s/cluster.yaml
 [ℹ]  eksctl version 0.30.0
 [ℹ]  using region us-west-1
 [ℹ]  setting availability zones to [us-west-1b us-west-1a us-west-1b]
@@ -94,7 +95,7 @@ This might take between 5 to 25 minutes approximately.
 > You can do so with the following command
 >
 > ```
-> eksctl delete cluster --name telegraf
+> $ eksctl delete cluster --name telegraf
 > ```
 
 ### Ensure `kubectl` works with created cluster
@@ -119,7 +120,7 @@ We're going to use `helm` to for this purpose.
 First add helm repository
 
 ```
-helm repo add sumologic https://sumologic.github.io/sumologic-kubernetes-collection
+$ helm repo add sumologic https://sumologic.github.io/sumologic-kubernetes-collection
 
 "sumologic" has been added to your repositories
 ```
@@ -127,7 +128,7 @@ helm repo add sumologic https://sumologic.github.io/sumologic-kubernetes-collect
 And then install the collection via
 
 ```
-helm upgrade --install my-release sumologic/sumologic --set sumologic.accessId=<SUMO_ACCESS_ID> --set sumologic.accessKey=<SUMO_ACCESS_KEY>  --set sumologic.clusterName="telegraf" --set telegraf-operator.enabled=true
+$ helm upgrade --install my-release sumologic/sumologic --set sumologic.accessId=<SUMO_ACCESS_ID> --set sumologic.accessKey=<SUMO_ACCESS_KEY>  --set sumologic.clusterName="telegraf" --set telegraf-operator.enabled=true
 Release "my-release" does not exist. Installing it now.
 manifest_sorter.go:192: info: skipping unknown hook: "crd-install"
 manifest_sorter.go:192: info: skipping unknown hook: "crd-install"
@@ -153,7 +154,7 @@ WARNING: File persistence for fluentd is disabled. This might lead to loss of da
 When the above finishes please confirm that collection's pods are running in the cluster
 
 ```
-kubectl get pods
+$ kubectl get pods
 NAME                                                  READY   STATUS    RESTARTS   AGE
 my-release-fluent-bit-gw88r                           1/1     Running   0          49s
 my-release-fluent-bit-jx677                           1/1     Running   0          49s
@@ -223,19 +224,19 @@ telegraf-operator:
 ### Deploy redis to cluster
 
 ```
-kubectl create ns redis
+$ kubectl create ns redis
 namespace/redis created
 ```
 
 ```
-kubectl --namespace redis apply -f ./k8s/redis/statefulset.yaml
+$ kubectl --namespace redis apply -f ./k8s/redis/statefulset.yaml
 statefulset.apps/redis created
 ```
 
 Now you should observe that redis is running with telegraf sidecar inside the pod
 
 ```
-kubectl describe pod -n redis redis-0
+$ kubectl describe pod -n redis redis-0
 Name:         redis-0
 Namespace:    redis
 Priority:     0
@@ -330,7 +331,7 @@ _source="(default-metrics)" metric=redis*
 ### Deploy nginx to the cluster
 
 ```
-kubectl create ns nginx
+$ kubectl create ns nginx
 namespace/nginx created
 ```
 
@@ -338,19 +339,19 @@ One can observe that configmap applied below also contains nginx status page con
 as it's done for [non-k8s approach](/non-k8s/README.md#add-status-page-configuration-to-nginx) as well
 
 ```
-kubectl apply -f ./k8s/nginx/configmap.yaml
+$ kubectl apply -f ./k8s/nginx/configmap.yaml
 configmap/nginx-config created
 ```
 
 ```
-kubectl apply -f ./k8s/nginx/statefulset.yaml
+$ kubectl apply -f ./k8s/nginx/statefulset.yaml
 statefulset.apps/nginx created
 ```
 
 Now you should observe that nginx is running with telegraf sidecar inside the pod
 
 ```
-kubectl describe pod --namespace nginx nginx-0
+$ kubectl describe pod --namespace nginx nginx-0
 Name:         nginx-0
 Namespace:    nginx
 Priority:     0
@@ -443,14 +444,14 @@ _source="(default-metrics)" metric=nginx*
 Create `jolokia2` namespace
 
 ```
-kubectl create ns jolokia2
+$ kubectl create ns jolokia2
 namespace/jolokia2 created
 ```
 
 and deploy tomcat with jolokia2 agent.
 
 ```
-kubectl apply -f ./k8s/jolokia2/statefulset.yaml
+$ kubectl apply -f ./k8s/jolokia2/statefulset.yaml
 statefulset.apps/jolokia created
 ```
 

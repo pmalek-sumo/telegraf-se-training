@@ -50,7 +50,7 @@ When you're logged in to the machine download `telegraf`
 After installing `telegraf` with steps below ensure you can run it
 
 ```
-telegraf --version
+$ telegraf --version
 Telegraf 1.16.1 (git: HEAD 292e285a)
 ```
 
@@ -65,7 +65,7 @@ by `influxdata`.
 First download telegraf
 
 ```
-curl -O https://dl.influxdata.com/telegraf/releases/telegraf-1.16.1-1.x86_64.rpm
+$ curl -O https://dl.influxdata.com/telegraf/releases/telegraf-1.16.1-1.x86_64.rpm
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100 20.6M  100 20.6M    0     0  72.0M      0 --:--:-- --:--:-- --:--:-- 71.8M
@@ -74,7 +74,7 @@ curl -O https://dl.influxdata.com/telegraf/releases/telegraf-1.16.1-1.x86_64.rpm
 and then install it using `yum`
 
 ```
-sudo yum localinstall telegraf-1.16.1-1.x86_64.rpm -y
+$ sudo yum localinstall telegraf-1.16.1-1.x86_64.rpm -y
 Failed to set locale, defaulting to C
 Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
 Examining telegraf-1.16.1-1.x86_64.rpm: telegraf-1.16.1-1.x86_64
@@ -118,7 +118,7 @@ Complete!
 ### Install redis on Amazon Linux 2
 
 ```
-sudo amazon-linux-extras install redis4.0 -y
+$ sudo amazon-linux-extras install redis4.0 -y
 Installing redis
 Failed to set locale, defaulting to C
 Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
@@ -177,7 +177,7 @@ Complete!
 Start `redis-server` in a separate terminal window
 
 ```
-redis-server
+$ redis-server
 12664:C 30 Oct 10:03:44.572 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
 12664:C 30 Oct 10:03:44.572 # Redis version=4.0.10, bits=64, commit=00000000, modified=0, pid=12664, just started
 ...
@@ -212,7 +212,7 @@ creating HTTP Source at sumologic
 ### Start telegraf to collect metrics from redis
 
 ```
-telegraf --config .redis.conf
+$ telegraf --config .redis.conf
 2020-10-26T11:42:47Z I! Starting Telegraf 1.16.1
 2020-10-26T11:42:47Z I! Loaded inputs: redis
 2020-10-26T11:42:47Z I! Loaded aggregators:
@@ -238,7 +238,7 @@ Open its metrics view and validate that metrics are coming to Sumo
 ### Install nginx on Amazon Linux 2
 
 ```
-sudo amazon-linux-extras install nginx1 -y
+$ sudo amazon-linux-extras install nginx1 -y
 Installing nginx
 Failed to set locale, defaulting to C
 Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
@@ -311,14 +311,14 @@ server{
 ### Start nginx
 
 ```
-sudo service nginx start
+$ sudo service nginx start
 Redirecting to /bin/systemctl start nginx.service
 ```
 
 At this point we should get the following when sending a request to the server via `curl`
 
 ```
-curl http://localhost/nginx_status
+$ curl http://localhost/nginx_status
 Active connections: 1
 server accepts handled requests
  1 1 1
@@ -353,7 +353,7 @@ creating HTTP Source at sumologic.
 ### Start telegraf to collect metrics from nginx
 
 ```
-telegraf --config nginx.conf
+$ telegraf --config nginx.conf
 2020-10-27T12:55:11Z I! Starting Telegraf 1.16.1
 2020-10-27T12:55:11Z I! Loaded inputs: nginx
 2020-10-27T12:55:11Z I! Loaded aggregators:
@@ -377,7 +377,7 @@ Open its metrics view and validate that metrics are coming to Sumo
 Install java and tomcat
 
 ```
-sudo amazon-linux-extras install java-openjdk11 tomcat8.5 -y
+$ sudo amazon-linux-extras install java-openjdk11 tomcat8.5 -y
 Installing java-11-openjdk
 Failed to set locale, defaulting to C
 Loaded plugins: extras_suggestions, langpacks, priorities, update-motd
@@ -415,7 +415,7 @@ Complete!
 Download jolokia2 agent
 
 ```
-curl -L -O https://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/1.6.2/jolokia-jvm-1.6.2-agent.jar
+$ curl -L -O https://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/1.6.2/jolokia-jvm-1.6.2-agent.jar
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   134  100   134    0     0    451      0 --:--:-- --:--:-- --:--:--   451
@@ -425,7 +425,7 @@ curl -L -O https://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-j
 and move it to `/`
 
 ```
-sudo cp jolokia-jvm-1.6.2-agent.jar /
+$ sudo cp jolokia-jvm-1.6.2-agent.jar /
 ```
 
 Edit `/usr/lib/systemd/system/tomcat.service` so that it includes java agent
@@ -454,14 +454,14 @@ Environment="CATALINA_OPTS=-javaagent:/jolokia-jvm-1.6.2-agent.jar=host=0.0.0.0,
 and now we can run `tomcat`
 
 ```
-sudo service tomcat start
+$ sudo service tomcat start
 Redirecting to /bin/systemctl start tomcat.service
 ```
 
 Now confirm that jolokia2 endpoint is working via (using `jq` for pretty JSON output)
 
 ```
-curl -s http://localhost:8778/jolokia/version | jq
+$ curl -s http://localhost:8778/jolokia/version | jq
 {
   "request": {
     "type": "version"
@@ -592,7 +592,7 @@ creating HTTP Source at sumologic.
 ### Start telegraf to collect metrics from jolokia2 jvm agent
 
 ```
-telegraf --config jolokia2.conf
+$ telegraf --config jolokia2.conf
 2020-10-28T12:12:51Z I! Starting Telegraf 1.16.1
 2020-10-28T12:12:51Z I! Loaded inputs: jolokia2_agent
 2020-10-28T12:12:51Z I! Loaded aggregators:
@@ -656,7 +656,7 @@ nginx,host=pmalek-mac,port=8080,server=localhost reading=0i,writing=1i,waiting=0
 To make `telegraf` logs more verbose one can add `--debug` flag when starting it
 
 ```
-telegraf --config nginx.conf --debug
+$ telegraf --config nginx.conf --debug
 2020-10-27T13:01:37Z I! Starting Telegraf 1.16.1
 2020-10-27T13:01:37Z I! Loaded inputs: nginx
 2020-10-27T13:01:37Z I! Loaded aggregators:
